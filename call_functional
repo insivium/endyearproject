@@ -1,0 +1,113 @@
+function alpha = fuzzy_call_price_analysis(S1, r, sigma, alpha_values, K, T, c)
+    % Main function to perform fuzzy call price analysis
+    
+    % Calculate alpha-cuts
+    alpha_cuts = calculate_alpha_cuts(S1, r, sigma, alpha_values);
+
+    % Calculate fuzzy call prices
+    call_prices = calculate_fuzzy_call_prices(alpha_cuts, alpha_values, K, T);
+
+    % Find the alpha value given the call price
+    alpha = find_alpha_given_call_price(c, call_prices);
+
+    fprintf('Alpha value given a call price of %.2f = %.4f\n', c, alpha);
+end
+
+function alpha_cuts = calculate_alpha_cuts(S1, r, sigma, alpha_values)
+    num_params = 3; % number of fuzzy parameters
+    alpha_cuts = zeros(length(alpha_values), 2, num_params);
+
+    for param_idx = 1:num_params
+        switch param_idx
+            case 1
+                S = S1;
+            case 2
+                S = r;
+            case 3
+                S = sigma;
+        end
+        for i = 1:length(alpha_values)
+            alpha = alpha_values(i);
+            cuts_lower = S(1) + alpha * (S(2) - S(1));
+            cuts_upper = S(3) - (S(3) - S(2)) * alpha;
+            alpha_cuts(i, 1, param_idx) = cuts_lower;
+            alpha_cuts(i, 2, param_idx) = cuts_upper;
+        end
+    end
+end
+
+function call_prices = calculate_fuzzy_call_prices(alpha_cuts, alpha_values, K, T)
+    call_prices = zeros(length(alpha_values), 3); % Updated to include alpha values
+
+    for i = 1:length(alpha_values)
+        % Calculate the lower bound of the call price
+        S = alpha_cuts(i, 1, 1);
+        r_value = alpha_cuts(i, 1, 2);
+        sigma_value = alpha_cuts(i, 1, 3);
+        d1 = (log(S / K) + (r_value + sigma_value^2 / 2) * T) / (sigma_value * sqrt(T));
+        d2 = d1 - sigma_value * sqrt(T);
+        call_prices(i, 1) = alpha_values(i); % Store alpha value
+        call_prices(i, 2) = S * normcdf(d1) - K * exp(-r_value * T) * normcdf(d2); % Lower bound
+
+        % Calculate the upper bound of the call price
+        S = alpha_cuts(i, 2, 1);
+        r_value = alpha_cuts(i, 2, 2);
+        sigma_value = alpha_cuts(i, 2, 3);
+        d1 = (log(S / K) + (r_value + sigma_value^2 / 2) * T) / (sigma_value * sqrt(T));
+        d2 = d1 - sigma_value * sqrt(T);
+        call_prices(i, 3) = S * normcdf(d1) - K * exp(-r_value * T) * normcdf(d2); % Upper bound
+    end
+end
+
+function alpha = find_alpha_given_call_price(c, call_prices)
+    % Step 1: Find the interval where c lies
+    min_residual = Inf; % Initialize to positive infinity
+    interval_idx = [];
+
+    for i = 1:size(call_prices, 1)
+        if c >= call_prices(i, 2) && c <= call_prices(i, 3)
+            % Calculate residuals
+            residual_low = abs(c - round(call_prices(i, 2), 3));
+            residual_up = abs(c - round(call_prices(i, 3), 3));
+            % Calculate minimum residual among the two endpoints
+            min_res = min(residual_low, residual_up);
+            % Update minimum residual and interval index
+            if min_res < min_residual
+                min_residual = min_res;
+                interval_idx = i;
+            end
+        end
+    end
+
+    if isempty(interval_idx)
+        error('No interval found containing the given call price.');
+    end
+
+    % Step 2: Choose the endpoint with the smallest residual difference
+    interval = call_prices(interval_idx, 2:3);
+    if abs(c - interval(1)) < abs(c - interval(2))
+        nu = interval(1);
+    else
+        nu = interval(2);
+    end
+
+    tolerance = 1e-6;
+    low = 0;
+    up = 1;
+
+    % Step 3: Assign alpha value corresponding to chosen interval
+    alpha = call_prices(interval_idx, 1);
+
+    while (up - low) / 2 > tolerance
+        if nu > c
+            up = alpha;
+        else
+            low = alpha;
+        end
+        alpha = (low + up) / 2;
+
+        % Update nu based on the new alpha value
+        alpha_index = find(round(call_prices(:, 1), 2) == round(alpha, 2), 1);
+        nu = call_prices(alpha_index, 2);
+    end
+end
