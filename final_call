@@ -1,44 +1,56 @@
-function alpha = fuzzy_call_price_analysis(S1, r, sigma, alpha_values, K, T, c)
-    % Main function to perform fuzzy call price analysis
-    
-    % Calculate alpha-cuts
+function [alpha_values, call_prices, alpha_cuts, alpha_given_call] = final_call(S1, r, sigma, K, c)
+    % Calculate the alpha-cuts
+    alpha_values = 0.78:0.01:0.99;
     alpha_cuts = calculate_alpha_cuts(S1, r, sigma, alpha_values);
-
+    
     % Calculate fuzzy call prices
-    call_prices = calculate_fuzzy_call_prices(alpha_cuts, alpha_values, K, T);
-
-    % Find the alpha value given the call price
-    alpha = find_alpha_given_call_price(c, call_prices);
-
-    fprintf('Alpha value given a call price of %.2f = %.4f\n', c, alpha);
+    call_prices = calculate_fuzzy_call_prices(alpha_cuts, alpha_values, K);
+    
+    % Find alpha value given the call price
+    alpha_given_call = find_alpha_given_call_price(call_prices, alpha_values, c);
+    
+    % Display alpha-cuts and call prices
+    display_alpha_cuts(alpha_cuts, alpha_values);
+    display_call_prices(call_prices, alpha_values);
+    
+    % Display the alpha value given a call price
+    fprintf('Alpha value given a call price of %.2f = %.4f\n', c, alpha_given_call);
 end
 
 function alpha_cuts = calculate_alpha_cuts(S1, r, sigma, alpha_values)
     num_params = 3; % number of fuzzy parameters
     alpha_cuts = zeros(length(alpha_values), 2, num_params);
 
+    fprintf('Alpha-cuts of the fuzzy parameters:\n');
     for param_idx = 1:num_params
         switch param_idx
             case 1
                 S = S1;
+                param_name = 'Stock price';
             case 2
                 S = r;
+                param_name = 'Risk-free rate';
             case 3
                 S = sigma;
+                param_name = 'Volatility';
         end
+        fprintf('%s:\n', param_name);
         for i = 1:length(alpha_values)
             alpha = alpha_values(i);
             cuts_lower = S(1) + alpha * (S(2) - S(1));
             cuts_upper = S(3) - (S(3) - S(2)) * alpha;
             alpha_cuts(i, 1, param_idx) = cuts_lower;
             alpha_cuts(i, 2, param_idx) = cuts_upper;
+            fprintf('Alpha = %.2f: Lower = %.4f, Upper = %.4f\n', alpha, cuts_lower, cuts_upper);
         end
     end
 end
 
-function call_prices = calculate_fuzzy_call_prices(alpha_cuts, alpha_values, K, T)
+function call_prices = calculate_fuzzy_call_prices(alpha_cuts, alpha_values, K)
+    T = 0.25;
     call_prices = zeros(length(alpha_values), 3); % Updated to include alpha values
 
+    fprintf('Calculating fuzzy call prices for each alpha value...\n');
     for i = 1:length(alpha_values)
         % Calculate the lower bound of the call price
         S = alpha_cuts(i, 1, 1);
@@ -56,19 +68,26 @@ function call_prices = calculate_fuzzy_call_prices(alpha_cuts, alpha_values, K, 
         d1 = (log(S / K) + (r_value + sigma_value^2 / 2) * T) / (sigma_value * sqrt(T));
         d2 = d1 - sigma_value * sqrt(T);
         call_prices(i, 3) = S * normcdf(d1) - K * exp(-r_value * T) * normcdf(d2); % Upper bound
+        
+        fprintf('Alpha = %.2f: Call Price Lower = %.4f, Call Price Upper = %.4f\n', alpha_values(i), call_prices(i, 2), call_prices(i, 3));
     end
 end
 
-function alpha = find_alpha_given_call_price(c, call_prices)
-    % Step 1: Find the interval where c lies
+function alpha_given_call = find_alpha_given_call_price(call_prices, alpha_values, c)
+    tolerance = 1e-6;
+    low = 0;
+    up = 1;
+
+    % Initialize minimum residual and interval index
     min_residual = Inf; % Initialize to positive infinity
     interval_idx = [];
 
+    % Step 1: Find the interval where c lies
     for i = 1:size(call_prices, 1)
         if c >= call_prices(i, 2) && c <= call_prices(i, 3)
             % Calculate residuals
-            residual_low = abs(c - round(call_prices(i, 2), 3));
-            residual_up = abs(c - round(call_prices(i, 3), 3));
+            residual_low = abs(c - round(call_prices(i, 2),3));
+            residual_up = abs(c - round(call_prices(i, 3),3));
             % Calculate minimum residual among the two endpoints
             min_res = min(residual_low, residual_up);
             % Update minimum residual and interval index
@@ -91,14 +110,10 @@ function alpha = find_alpha_given_call_price(c, call_prices)
         nu = interval(2);
     end
 
-    tolerance = 1e-6;
-    low = 0;
-    up = 1;
-
     % Step 3: Assign alpha value corresponding to chosen interval
     alpha = call_prices(interval_idx, 1);
 
-    while (up - low) / 2 > tolerance
+    while (up-low)/2 > tolerance
         if nu > c
             up = alpha;
         else
@@ -110,4 +125,37 @@ function alpha = find_alpha_given_call_price(c, call_prices)
         alpha_index = find(round(call_prices(:, 1), 2) == round(alpha, 2), 1);
         nu = call_prices(alpha_index, 2);
     end
+
+    alpha_given_call = alpha;
 end
+
+function display_alpha_cuts(alpha_cuts, alpha_values)
+    for param_idx = 1:size(alpha_cuts, 3)
+        param_name = "";
+        switch param_idx
+            case 1
+                param_name = 'Stock price';
+            case 2
+                param_name = 'Risk-free rate';
+            case 3
+                param_name = 'Volatility';
+        end
+        fprintf('%s:\n', param_name);
+        for i = 1:length(alpha_values)
+            alpha = alpha_values(i);
+            fprintf('Alpha = %.2f: Lower = %.4f, Upper = %.4f\n', alpha, alpha_cuts(i, 1, param_idx), alpha_cuts(i, 2, param_idx));
+        end
+    end
+end
+
+function display_call_prices(call_prices, alpha_values)
+    fprintf('Calculating fuzzy call prices for each alpha value...\n');
+    for i = 1:length(alpha_values)
+        fprintf('Alpha = %.2f: Call Price Lower = %.4f, Call Price Upper = %.4f\n', alpha_values(i), call_prices(i, 2), call_prices(i, 3));
+    end
+end
+
+
+% Call main function and display result
+[alpha] = fuzzy_call_price(S1, r, sigma, T, call_price, tolerance);
+fprintf('Alpha value given a call price: %.4f',alpha)
