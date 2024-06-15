@@ -1,0 +1,59 @@
+function alpha = findAlphaForCallPrice(S1, r, sigma, K, T, c)
+    % Calculate fuzzy call prices using the subfunction
+    call_prices = calculateFuzzyCallPrices(S1, r, sigma, K, T);
+
+    % Initialize minimum residual and interval index
+    min_residual = Inf; % Initialize to positive infinity
+    interval_idx = [];
+
+    % Step 1: Find the interval where c lies
+    for i = 1:size(call_prices, 1)
+        if c >= call_prices(i, 2) && c <= call_prices(i, 3)
+            % Calculate residuals
+            residual_low = abs(c - round(call_prices(i, 2), 3));
+            residual_up = abs(c - round(call_prices(i, 3), 3));
+            % Calculate minimum residual among the two endpoints
+            min_res = min(residual_low, residual_up);
+            % Update minimum residual and interval index
+            if min_res < min_residual
+                min_residual = min_res;
+                interval_idx = i;
+            end
+        end
+    end
+
+    if isempty(interval_idx)
+        error('No interval found containing the given call price.');
+    end
+
+    % Step 2: Choose the endpoint with the smallest residual difference
+    interval = call_prices(interval_idx, 2:3);
+    if abs(c - interval(1)) < abs(c - interval(2))
+        nu = interval(1);
+    else
+        nu = interval(2);
+    end
+
+    tolerance = 1e-6;
+    low = 0;
+    up = 1;
+
+    % Step 3: Assign alpha value corresponding to chosen interval
+    alpha = call_prices(interval_idx, 1);
+
+    % Bisection method to refine alpha
+    while (up - low) / 2 > tolerance
+        if nu > c
+            up = alpha;
+        else
+            low = alpha;
+        end
+        alpha = (low + up) / 2;
+
+        % Update nu based on the new alpha value
+        alpha_index = find(round(call_prices(:, 1), 2) == round(alpha, 2), 1);
+        nu = call_prices(alpha_index, 2);
+    end
+
+    fprintf('Alpha value given a call price of %.2f = %.4f\n', c, alpha);
+end
