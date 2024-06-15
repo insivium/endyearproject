@@ -1,0 +1,25 @@
+function alpha_cuts = calculateAlphaCuts(S1, r, sigma)
+    % Define the alpha values
+    alpha_values = 0.8:0.01:0.99;
+    num_params = 3; % number of fuzzy parameters
+    alpha_cuts = zeros(length(alpha_values), 2, num_params);
+
+    % Create a cell array to hold the parameter names and their values
+    params = {S1, 'Stock price'; r, 'Risk-free rate'; sigma, 'Volatility'};
+    
+    fprintf('Alpha-cuts of the fuzzy parameters:\n');
+    for param_idx = 1:num_params
+        S = params{param_idx, 1};
+        param_name = params{param_idx, 2};
+        
+        fprintf('%s:\n', param_name);
+        for i = 1:length(alpha_values)
+            alpha = alpha_values(i);
+            cuts_lower = S(1) + alpha * (S(2) - S(1));
+            cuts_upper = S(3) - (S(3) - S(2)) * alpha;
+            alpha_cuts(i, 1, param_idx) = cuts_lower;
+            alpha_cuts(i, 2, param_idx) = cuts_upper;
+            fprintf('Alpha = %.2f: Lower = %.4f, Upper = %.4f\n', alpha, cuts_lower, cuts_upper);
+        end
+    end
+end
