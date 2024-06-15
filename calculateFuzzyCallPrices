@@ -1,0 +1,30 @@
+function call_prices = calculateFuzzyCallPrices(S1, r, sigma, K, T)
+    % Calculate alpha cuts using the subfunction
+    alpha_cuts = calculateAlphaCuts(S1, r, sigma);
+
+    % Define the alpha values
+    alpha_values = 0.8:0.01:0.99;
+    call_prices = zeros(length(alpha_values), 3); % Updated to include alpha values
+
+    fprintf('Calculating fuzzy call prices for each alpha value...\n');
+    for i = 1:length(alpha_values)
+        % Calculate the lower bound of the call price
+        S = alpha_cuts(i, 1, 1);
+        r_value = alpha_cuts(i, 1, 2);
+        sigma_value = alpha_cuts(i, 1, 3);
+        d1 = (log(S / K) + (r_value + sigma_value^2 / 2) * T) / (sigma_value * sqrt(T));
+        d2 = d1 - sigma_value * sqrt(T);
+        call_prices(i, 1) = alpha_values(i); % Store alpha value
+        call_prices(i, 2) = S * normcdf(d1) - K * exp(-r_value * T) * normcdf(d2); % Lower bound
+
+        % Calculate the upper bound of the call price
+        S = alpha_cuts(i, 2, 1);
+        r_value = alpha_cuts(i, 2, 2);
+        sigma_value = alpha_cuts(i, 2, 3);
+        d1 = (log(S / K) + (r_value + sigma_value^2 / 2) * T) / (sigma_value * sqrt(T));
+        d2 = d1 - sigma_value * sqrt(T);
+        call_prices(i, 3) = S * normcdf(d1) - K * exp(-r_value * T) * normcdf(d2); % Upper bound
+
+        fprintf('Alpha = %.2f: Call Price Lower = %.4f, Call Price Upper = %.4f\n', alpha_values(i), call_prices(i, 2), call_prices(i, 3));
+    end
+end
